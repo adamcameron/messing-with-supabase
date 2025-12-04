@@ -3,11 +3,14 @@ import { createClient } from 'jsr:@supabase/supabase-js'
 
 console.log("add-to-testq called")
 
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+
 Deno.serve(async (req) => {
 
   const queues = createClient(
-    "http://host.docker.internal:54321",
-    "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH",
+    supabaseUrl,
+    supabaseKey,
     {db: { schema: 'pgmq_public' }}
   )
 
