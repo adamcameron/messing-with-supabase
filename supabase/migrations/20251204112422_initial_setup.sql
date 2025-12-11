@@ -64,6 +64,9 @@ CREATE OR REPLACE FUNCTION pgmq_public.send_batch(queue_name text, messages json
 AS $function$ begin return query select * from pgmq.send_batch( queue_name := queue_name, msgs := messages, delay := sleep_seconds ); end; $function$
 ;
 
+grant usage on schema pgmq_public to anon, authenticated, service_role;
+grant execute on all functions in schema pgmq_public to anon, authenticated, service_role;
+
 grant delete on table "public"."processed_messages" to "anon";
 
 grant insert on table "public"."processed_messages" to "anon";
@@ -128,5 +131,40 @@ grant update on table "public"."processed_messages" to "service_role";
   to authenticated
 with check (true);
 
+-- Create the queue
+select pgmq.create('testq');
 
+-- Enable RLS on queue table
+alter table pgmq.q_testq enable row level security;
+
+-- Create policy for authenticated users
+create policy "Enable all operations for authenticated users"
+on pgmq.q_testq
+as permissive
+for all
+to authenticated
+using (true)
+with check (true);
+
+-- Grant permissions to authenticated role
+grant select, insert, update, delete on table pgmq.q_testq to authenticated;
+
+grant usage on schema pgmq to anon, authenticated, service_role;
+grant execute on all functions in schema pgmq to anon, authenticated, service_role;
+
+grant select, insert, update, delete on table pgmq.q_testq to service_role;
+
+
+-- Schedule the cron job
+select cron.schedule(
+  'process-testq-job',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := 'http://kong:8000/functions/v1/process-testq',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU"}'::jsonb,
+    body := '{"count": 10}'::jsonb
+  ) as request_id;
+  $$
+);
 
